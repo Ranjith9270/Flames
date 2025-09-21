@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>FLAMES — Relationship Calculator</title>
+  <style>
+    :root{
+      --bg1: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+      --card: rgba(255,255,255,0.85);
+      --accent: #d6336c;
+      --muted: #666;
+      --glass: rgba(255,255,255,0.55);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      min-height:100vh;
+      font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+      background: var(--bg1);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+      color:#222;
+    }
+
+    .wrap{
+      width:100%;
+      max-width:920px;
+      display:grid;
+      grid-template-columns: 1fr 420px;
+      gap:24px;
+      align-items:center;
+    }
+
+    .hero{
+      background: linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.35));
+      padding:28px;
+      border-radius:16px;
+      box-shadow:0 10px 30px rgba(0,0,0,0.08);
+      backdrop-filter: blur(6px) saturate(120%);
+    }
+
+    h1{margin:0 0 8px 0; font-size:28px; letter-spacing:0.2px}
+    p.lead{margin:0 0 18px 0; color:var(--muted)}
+
+    .form-row{display:flex; gap:12px; margin-bottom:12px}
+    input[type="text"]{
+      flex:1;
+      padding:12px 14px;
+      border-radius:10px;
+      border:1px solid rgba(0,0,0,0.08);
+      font-size:15px;
+      outline:none;
+      background:transparent;
+    }
+    .controls{display:flex; gap:10px; margin-top:10px}
+    button{
+      padding:10px 14px;
+      border-radius:10px;
+      border:0;
+      cursor:pointer;
+      font-weight:600;
+      letter-spacing:0.2px;
+      box-shadow:0 6px 18px rgba(0,0,0,0.06);
+    }
+    button.primary{background:linear-gradient(90deg,#ff7a9a,#d6336c); color:white}
+    button.ghost{background:var(--glass)}
+
+    .result-card{
+      background:var(--card);
+      padding:18px;
+      border-radius:12px;
+      text-align:center;
+    }
+    .flame-list{display:flex; gap:8px; justify-content:center; margin-top:14px; flex-wrap:wrap}
+    .flame-item{padding:8px 12px; border-radius:999px; background:rgba(0,0,0,0.04); font-weight:700}
+
+    .panel{
+      background: rgba(255,255,255,0.9);
+      padding:20px;
+      border-radius:16px;
+      box-shadow:0 10px 30px rgba(0,0,0,0.06);
+    }
+    .panel h3{margin-top:0}
+    .mapping{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+    .map-item{background:rgba(0,0,0,0.03); padding:10px; border-radius:8px}
+
+    footer{font-size:13px; color:var(--muted); text-align:center; margin-top:14px}
+
+    @media (max-width:900px){
+      .wrap{grid-template-columns:1fr;}
+    }
+
+    /* Small animation highlight for the final result */
+    .final-result{display:inline-block; padding:12px 18px; border-radius:12px; font-weight:800; font-size:18px; background:linear-gradient(90deg,#fff3f6,#ffe5ef); color:#b2003a; box-shadow:0 8px 30px rgba(214,51,108,0.12)}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <h1>FLAMES — Relationship Calculator</h1>
+      <p class="lead">Type two names and see what FLAMES says. (Friendly fun — for entertainment only!)</p>
+
+      <div class="form-row">
+        <input id="name1" type="text" placeholder="Enter first name" autocomplete="off">
+        <input id="name2" type="text" placeholder="Enter second name" autocomplete="off">
+      </div>
+
+      <div class="controls">
+        <button id="calcBtn" class="primary">Calculate</button>
+        <button id="clearBtn" class="ghost">Clear</button>
+        <button id="shareBtn" class="ghost">Copy Result</button>
+      </div>
+
+      <div style="height:12px"></div>
+
+      <div class="result-card" id="resultCard" aria-live="polite">
+        <div id="resultIntro">Result will appear here after calculation.</div>
+        <div class="flame-list" id="flameList" aria-hidden="true"></div>
+      </div>
+
+      <footer>Built with ❤️ — FLAMES is just a classic playground game.</footer>
+    </div>
+
+    <div class="panel">
+      <h3>FLAMES mapping</h3>
+      <div class="mapping">
+        <div class="map-item"><strong>F</strong> — Friends</div>
+        <div class="map-item"><strong>L</strong> — Love</div>
+        <div class="map-item"><strong>A</strong> — Affection</div>
+        <div class="map-item"><strong>M</strong> — Marriage</div>
+        <div class="map-item"><strong>E</strong> — Enemy</div>
+        <div class="map-item"><strong>S</strong> — Siblings</div>
+  </div>
+
+  <script>
+    // FLAMES logic
+    function normalizeName(s){
+      return s.toLowerCase().replace(/[^a-z]/g, '');
+    }
+
+    function countRemainingChars(a, b){
+      // Remove matching letters by counting frequency
+      const freq = new Array(26).fill(0);
+      for(const ch of a) freq[ch.charCodeAt(0)-97]++;
+      for(const ch of b) {
+        const idx = ch.charCodeAt(0)-97;
+        if(freq[idx] > 0) freq[idx]--;
+        else freq[idx]++;
+      }
+      // sum non-zero counts
+      return freq.reduce((s, v) => s + Math.abs(v), 0);
+    }
+
+    function flamesResult(count){
+      // Use elimination method
+      let letters = ['F','L','A','M','E','S'];
+      if(count === 0) return {letter:'S', meaning:'Siblings'}; // conventional fallback when both names identical
+
+      let idx = 0; // starting index
+      while(letters.length > 1){
+        // The remove position is (idx + count - 1) % letters.length
+        const removeIndex = (idx + count - 1) % letters.length;
+        letters.splice(removeIndex, 1);
+        // next index is removeIndex (since list shrinks and we continue from next element)
+        idx = removeIndex % letters.length;
+      }
+
+      const mapping = {
+        'F': 'Friends',
+        'L': 'Love',
+        'A': 'Affection',
+        'M': 'Marriage',
+        'E': 'Enemy',
+        'S': 'Siblings'
+      };
+      return {letter: letters[0], meaning: mapping[letters[0]]};
+    }
+
+    // UI wiring
+    const name1El = document.getElementById('name1');
+    const name2El = document.getElementById('name2');
+    const calcBtn = document.getElementById('calcBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const shareBtn = document.getElementById('shareBtn');
+    const resultIntro = document.getElementById('resultIntro');
+    const flameList = document.getElementById('flameList');
+
+    function renderFlamesHighlight(order, removeIdx){
+      // optional visual: show FLAMES letters and highlight one removed
+      flameList.innerHTML = '';
+      const letters = ['F','L','A','M','E','S'];
+      for(let i=0;i<letters.length;i++){
+        const el = document.createElement('div');
+        el.className = 'flame-item';
+        el.textContent = letters[i];
+        if(order && order.includes(i) ) el.style.opacity = '0.35';
+        flameList.appendChild(el);
+      }
+    }
+
+    calcBtn.addEventListener('click', ()=>{
+      const n1 = normalizeName(name1El.value);
+      const n2 = normalizeName(name2El.value);
+
+      if(!n1 || !n2){
+        resultIntro.innerHTML = '<span style="color:#a33">Please enter both names (letters only).</span>';
+        flameList.setAttribute('aria-hidden','true');
+        return;
+      }
+
+      const count = countRemainingChars(n1, n2);
+      const res = flamesResult(count);
+
+      resultIntro.innerHTML = `Result: <span class="final-result">${res.letter} — ${res.meaning}</span>`;
+      flameList.setAttribute('aria-hidden','false');
+      renderFlamesHighlight();
+
+      // enable share button
+      shareBtn.disabled = false;
+      shareBtn.dataset.text = `${name1El.value} + ${name2El.value} = ${res.letter} (${res.meaning})`;
+    });
+
+    clearBtn.addEventListener('click', ()=>{
+      name1El.value = '';
+      name2El.value = '';
+      resultIntro.innerHTML = 'Result will appear here after calculation.';
+      flameList.innerHTML = '';
+      shareBtn.dataset.text = '';
+    });
+
+    shareBtn.addEventListener('click', ()=>{
+      const txt = shareBtn.dataset.text || 'No result yet.';
+      navigator.clipboard?.writeText(txt).then(()=>{
+        shareBtn.textContent = 'Copied!';
+        setTimeout(()=> shareBtn.textContent = 'Copy Result', 1400);
+      }).catch(()=>{
+        // fallback
+        prompt('Copy this result:', txt);
+      });
+    });
+
+    // allow Enter to calculate from either input
+    [name1El, name2El].forEach(i=> i.addEventListener('keydown', (e)=>{
+      if(e.key === 'Enter') calcBtn.click();
+    }));
+  </script>
+</body>
+</html>
